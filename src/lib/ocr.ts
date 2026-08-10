@@ -15,11 +15,22 @@ export interface OcrResult {
 
 const MIN_CONFIDENCE = 35;
 
+// A real speech-bubble line is a small fraction of the page. Tesseract
+// occasionally mis-segments background art or paper texture as a "line"
+// spanning a huge area — those get painted over in the compose step, which
+// is how a wrong detection ends up erasing most of the artwork. Anything
+// covering more of the page than this is treated as noise and dropped
+// before it ever reaches translation/painting.
+const MAX_LINE_AREA_RATIO = 0.12;
+
 export async function runOcr(
   source: HTMLCanvasElement | File,
   langCode: string,
   onProgress?: (fraction: number) => void
 ): Promise<OcrResult> {
+  const dims = await getSourceDimensions(source);
+  const pageArea = dims.width * dims.height;
+
   const worker = await createWorker(langCode, undefined, {
     logger: (m) => {
       if (m.status === "recognizing text" && typeof m.progress === "number") {
@@ -37,19 +48,22 @@ export async function runOcr(
       for (const paragraph of block.paragraphs ?? []) {
         for (const line of paragraph.lines ?? []) {
           const text = line.text.trim();
-          if (text.length > 0 && line.confidence >= MIN_CONFIDENCE) {
-            lines.push({
-              id: `line-${i++}`,
-              text,
-              confidence: line.confidence,
-              bbox: line.bbox,
-            });
-          }
+          if (text.length === 0 || line.confidence < MIN_CONFIDENCE) continue;
+
+          const { x0, y0, x1, y1 } = line.bbox;
+          const lineArea = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+          if (pageArea > 0 && lineArea / pageArea > MAX_LINE_AREA_RATIO) continue;
+
+          lines.push({
+            id: `line-${i++}`,
+            text,
+            confidence: line.confidence,
+            bbox: line.bbox,
+          });
         }
       }
     }
 
-    const dims = await getSourceDimensions(source);
     return { lines, imageWidth: dims.width, imageHeight: dims.height };
   } finally {
     await worker.terminate();

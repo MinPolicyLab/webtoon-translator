@@ -130,8 +130,12 @@ export function composeTranslatedImage(
     const boxH = y1 - y0;
     if (boxW <= 0 || boxH <= 0) continue;
 
-    const padX = Math.max(3, boxW * 0.08);
-    const padY = Math.max(2, boxH * 0.22);
+    // Padding is kept small and, crucially, capped in absolute pixels (not
+    // just proportionally) — for a large or misread bounding box, an
+    // unbounded percentage-of-size padding can balloon the painted-over
+    // rectangle far past the actual text, erasing surrounding artwork.
+    const padX = Math.min(10, Math.max(2, boxW * 0.05));
+    const padY = Math.min(8, Math.max(2, boxH * 0.12));
     const rx = x0 - padX;
     const ry = y0 - padY;
     const rw = boxW + padX * 2;

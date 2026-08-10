@@ -50,12 +50,13 @@ function scoreOcrResult(result: OcrResult): number {
   return avgConfidence * Math.min(result.lines.length, 5);
 }
 
-const GOOD_ENOUGH_SCORE = 65 * 2; // roughly: a couple of lines recognized with solid confidence
-
 /**
- * Tries the requested OCR language first. If the result looks weak (empty,
- * or low-confidence), tries every other supported language too and keeps
- * whichever attempt scored best overall.
+ * Runs OCR with every supported language and keeps whichever one scored
+ * best. A "good enough" early exit was tried first, but wrong-language OCR
+ * can still rack up a passable score across several force-fit lines (seen
+ * with a Thai model reading Latin text), so it wasn't reliable — checking
+ * every language against every page is the only way that consistently
+ * catches the actual best match.
  */
 async function ocrWithLanguageFallback(
   canvas: HTMLCanvasElement,
@@ -64,13 +65,12 @@ async function ocrWithLanguageFallback(
   onOcrProgress?: (fraction: number) => void
 ): Promise<{ ocrResult: OcrResult; usedSourceCode: string; autoDetected: boolean }> {
   const primary = await runOcr(canvas, sourceOcrCode, onOcrProgress);
-  const primaryScore = scoreOcrResult(primary);
 
-  if (!autoDetectLang || primaryScore >= GOOD_ENOUGH_SCORE) {
+  if (!autoDetectLang) {
     return { ocrResult: primary, usedSourceCode: sourceOcrCode, autoDetected: false };
   }
 
-  let best = { code: sourceOcrCode, result: primary, score: primaryScore };
+  let best = { code: sourceOcrCode, result: primary, score: scoreOcrResult(primary) };
   const candidates = SOURCE_LANGUAGES.map((l) => l.ocrCode).filter((code) => code !== sourceOcrCode);
 
   for (const candidate of candidates) {

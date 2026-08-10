@@ -198,7 +198,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
                 disabled={running}
                 onChange={(e) => setAutoDetectLang(e.target.checked)}
               />
-              <span>인식 안 되면 다른 언어 자동 시도</span>
+              <span>지원 언어 모두 확인해서 가장 정확한 언어 자동 선택</span>
             </label>
           </div>
 
