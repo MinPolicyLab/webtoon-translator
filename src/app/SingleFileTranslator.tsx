@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
 import { getPdfPageCount, renderPdfPageToCanvas } from "@/lib/pdf";
 import { processCanvas, type PageResult } from "@/lib/pipeline";
+import { findSourceLanguage } from "@/lib/languages";
 
 type Status = "idle" | "loading-page" | "ocr" | "translating" | "done" | "error";
 
@@ -24,6 +25,7 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
   const [result, setResult] = useState<PageResult | null>(null);
   const [viewMode, setViewMode] = useState<"translated" | "original">("translated");
   const [showOriginal, setShowOriginal] = useState(false);
+  const [autoDetectLang, setAutoDetectLang] = useState(true);
 
   const [canvasUrl, setCanvasUrl] = useState<string>("");
   const [composedUrl, setComposedUrl] = useState<string>("");
@@ -42,7 +44,14 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
         setCanvasUrl(canvas.toDataURL("image/png"));
 
         setStatus("ocr");
-        const pageResult = await processCanvasWithPhase(canvas, sourceCode, targetCode, (p) => setProgress(p), setStatus);
+        const pageResult = await processCanvasWithPhase(
+          canvas,
+          sourceCode,
+          targetCode,
+          (p) => setProgress(p),
+          setStatus,
+          autoDetectLang
+        );
 
         setResult(pageResult);
         if (pageResult.composedCanvas) {
@@ -55,7 +64,7 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
         setStatus("error");
       }
     },
-    [sourceCode, targetCode]
+    [sourceCode, targetCode, autoDetectLang]
   );
 
   const handleFileChange = useCallback(
@@ -85,10 +94,10 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
       // eslint-disable-next-line react-hooks/set-state-in-effect
       void run(file, fileKind, pageIndex);
     }
-    // Re-runs whenever the page or languages change; `run`'s identity is
-    // intentionally not a dependency here.
+    // Re-runs whenever the page, languages, or auto-detect toggle change;
+    // `run`'s identity is intentionally not a dependency here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageIndex, sourceCode, targetCode]);
+  }, [pageIndex, sourceCode, targetCode, autoDetectLang]);
 
   const onDrop = useCallback(
     (e: React.DragEvent<HTMLLabelElement>) => {
@@ -168,6 +177,15 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
         )}
 
         <label className={styles.toggle}>
+          <input
+            type="checkbox"
+            checked={autoDetectLang}
+            onChange={(e) => setAutoDetectLang(e.target.checked)}
+          />
+          <span>인식 안 되면 다른 언어 자동 시도</span>
+        </label>
+
+        <label className={styles.toggle}>
           <input type="checkbox" checked={showOriginal} onChange={(e) => setShowOriginal(e.target.checked)} />
           <span>목록에 원문도 함께 표시</span>
         </label>
@@ -215,7 +233,14 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
             <aside className={styles.linePanel}>
               <div className={styles.linePanelHeader}>
                 <span>인식된 대사 {lines.length}줄</span>
-                {result?.provider && <span className={styles.providerTag}>{result.provider}</span>}
+                <span className={styles.tagGroup}>
+                  {result?.autoDetected && (
+                    <span className={styles.autoTag}>
+                      자동 감지: {findSourceLanguage(result.usedSourceCode).label}
+                    </span>
+                  )}
+                  {result?.provider && <span className={styles.providerTag}>{result.provider}</span>}
+                </span>
               </div>
               <ol className={styles.lineList}>
                 {lines.map((line) => (
@@ -238,12 +263,19 @@ async function processCanvasWithPhase(
   sourceCode: string,
   targetCode: string,
   onOcrProgress: (fraction: number) => void,
-  setStatus: (s: Status) => void
+  setStatus: (s: Status) => void,
+  autoDetectLang: boolean
 ): Promise<PageResult> {
-  const result = await processCanvas(canvas, sourceCode, targetCode, (p) => {
-    onOcrProgress(p);
-    if (p > 0) setStatus("ocr");
-  });
+  const result = await processCanvas(
+    canvas,
+    sourceCode,
+    targetCode,
+    (p) => {
+      onOcrProgress(p);
+      if (p > 0) setStatus("ocr");
+    },
+    autoDetectLang
+  );
   if (result.lines.length > 0) setStatus("translating");
   return result;
 }

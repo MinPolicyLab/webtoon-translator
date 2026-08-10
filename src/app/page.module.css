@@ -355,6 +355,21 @@
   border: 1px solid var(--border-strong);
 }
 
+.tagGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.autoTag {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft, rgba(192, 86, 33, 0.14));
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
 .lineList {
   margin: 0;
   padding: 8px 16px 16px;

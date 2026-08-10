@@ -5,6 +5,7 @@ import JSZip from "jszip";
 import styles from "./page.module.css";
 import { buildWorkItems, type WorkItem } from "@/lib/batch";
 import { processCanvas } from "@/lib/pipeline";
+import { findSourceLanguage } from "@/lib/languages";
 
 type ItemStatus = "pending" | "processing" | "done" | "error";
 
@@ -15,6 +16,8 @@ interface BatchItem {
   composedUrl?: string;
   lineCount?: number;
   errorMsg?: string;
+  autoDetected?: boolean;
+  usedSourceCode?: string;
 }
 
 interface Props {
@@ -28,6 +31,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
   const [items, setItems] = useState<BatchItem[]>([]);
   const [running, setRunning] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [autoDetectLang, setAutoDetectLang] = useState(true);
 
   const stopRef = useRef(false);
   const dirInputRef = useRef<HTMLInputElement>(null);
@@ -73,11 +77,20 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
 
       try {
         const canvas = await item.getCanvas();
-        const result = await processCanvas(canvas, sourceCode, targetCode);
+        const result = await processCanvas(canvas, sourceCode, targetCode, undefined, autoDetectLang);
         const composedUrl = (result.composedCanvas ?? canvas).toDataURL("image/png");
         setItems((prev) =>
           prev.map((it) =>
-            it.id === item.id ? { ...it, status: "done", composedUrl, lineCount: result.lines.length } : it
+            it.id === item.id
+              ? {
+                  ...it,
+                  status: "done",
+                  composedUrl,
+                  lineCount: result.lines.length,
+                  autoDetected: result.autoDetected,
+                  usedSourceCode: result.usedSourceCode,
+                }
+              : it
           )
         );
       } catch (err) {
@@ -93,7 +106,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
     }
 
     setRunning(false);
-  }, [workItems, sourceCode, targetCode]);
+  }, [workItems, sourceCode, targetCode, autoDetectLang]);
 
   const stopBatch = useCallback(() => {
     stopRef.current = true;
@@ -171,6 +184,16 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
                 번역본 전체 ZIP 다운로드 ({doneCount})
               </button>
             )}
+
+            <label className={styles.toggle}>
+              <input
+                type="checkbox"
+                checked={autoDetectLang}
+                disabled={running}
+                onChange={(e) => setAutoDetectLang(e.target.checked)}
+              />
+              <span>인식 안 되면 다른 언어 자동 시도</span>
+            </label>
           </div>
 
           {(running || processedCount > 0) && (
@@ -200,6 +223,11 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
                   <span className={styles.batchLabel} title={it.label}>
                     {it.label}
                   </span>
+                  {it.autoDetected && it.usedSourceCode && (
+                    <span className={styles.autoTag}>
+                      자동 감지: {findSourceLanguage(it.usedSourceCode).label}
+                    </span>
+                  )}
                   {it.status === "done" && (
                     <a href={it.composedUrl} download={`${it.label.replace(/\.[^.]+$/, "")}-translated.png`}>
                       다운로드
