@@ -38,6 +38,30 @@
   line-height: 1.6;
 }
 
+.modeSwitch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  width: fit-content;
+}
+.modeSwitch button {
+  padding: 7px 16px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.modeActive {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+
 .dropzone {
   position: relative;
   display: flex;
@@ -130,6 +154,7 @@
   display: inline-flex;
   align-items: center;
   padding: 8px 14px;
+  border: none;
   border-radius: 8px;
   background: var(--accent);
   color: #fff;
@@ -140,6 +165,88 @@
 }
 .downloadBtn:hover {
   filter: brightness(1.06);
+}
+
+.stopBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.batchCount {
+  font-size: 14px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.batchGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.batchCard {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+.batchCard[data-status="processing"] {
+  border-color: var(--accent);
+}
+.batchCard[data-status="error"] {
+  border-color: var(--danger-border);
+}
+
+.batchThumb {
+  aspect-ratio: 3 / 4;
+  background: var(--stage);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.batchThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.batchThumbPlaceholder {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.batchMeta {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.batchLabel {
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.batchMeta a {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.batchError {
+  font-size: 11.5px;
+  color: var(--danger-text);
 }
 
 .statusBar {
