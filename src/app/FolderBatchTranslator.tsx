@@ -6,6 +6,7 @@ import styles from "./page.module.css";
 import { buildWorkItems, type WorkItem } from "@/lib/batch";
 import { processCanvas } from "@/lib/pipeline";
 import { findSourceLanguage } from "@/lib/languages";
+import Lightbox from "./Lightbox";
 
 type ItemStatus = "pending" | "processing" | "done" | "error";
 
@@ -32,6 +33,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
   const [running, setRunning] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [autoDetectLang, setAutoDetectLang] = useState(true);
+  const [lightboxId, setLightboxId] = useState<string | null>(null);
 
   const stopRef = useRef(false);
   const dirInputRef = useRef<HTMLInputElement>(null);
@@ -129,9 +131,13 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
     URL.revokeObjectURL(url);
   }, [items, folderName]);
 
-  const doneCount = items.filter((it) => it.status === "done").length;
+  const doneItems = items.filter((it) => it.status === "done" && it.composedUrl);
+  const doneCount = doneItems.length;
   const errorCount = items.filter((it) => it.status === "error").length;
   const processedCount = doneCount + errorCount;
+
+  const previewItems = doneItems.map((it) => ({ label: it.label, url: it.composedUrl! }));
+  const lightboxIndex = lightboxId ? doneItems.findIndex((it) => it.id === lightboxId) : -1;
 
   return (
     <>
@@ -209,7 +215,11 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
           <div className={styles.batchGrid}>
             {items.map((it) => (
               <div key={it.id} className={styles.batchCard} data-status={it.status}>
-                <div className={styles.batchThumb}>
+                <div
+                  className={styles.batchThumb}
+                  data-clickable={it.status === "done" ? "true" : "false"}
+                  onClick={() => it.status === "done" && setLightboxId(it.id)}
+                >
                   {it.composedUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={it.composedUrl} alt={it.label} />
@@ -239,6 +249,10 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
             ))}
           </div>
         </>
+      )}
+
+      {lightboxIndex >= 0 && (
+        <Lightbox items={previewItems} initialIndex={lightboxIndex} onClose={() => setLightboxId(null)} />
       )}
     </>
   );

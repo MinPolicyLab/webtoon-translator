@@ -5,6 +5,7 @@ import styles from "./page.module.css";
 import { getPdfPageCount, renderPdfPageToCanvas } from "@/lib/pdf";
 import { processCanvas, type PageResult } from "@/lib/pipeline";
 import { findSourceLanguage } from "@/lib/languages";
+import Lightbox from "./Lightbox";
 
 type Status = "idle" | "loading-page" | "ocr" | "translating" | "done" | "error";
 
@@ -26,6 +27,7 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
   const [viewMode, setViewMode] = useState<"translated" | "original">("translated");
   const [showOriginal, setShowOriginal] = useState(false);
   const [autoDetectLang, setAutoDetectLang] = useState(true);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const [canvasUrl, setCanvasUrl] = useState<string>("");
   const [composedUrl, setComposedUrl] = useState<string>("");
@@ -190,6 +192,12 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
           <span>목록에 원문도 함께 표시</span>
         </label>
 
+        {canvasUrl && (
+          <button type="button" className={styles.downloadBtn} onClick={() => setLightboxOpen(true)}>
+            전체화면으로 보기
+          </button>
+        )}
+
         {composedUrl && (
           <a
             className={styles.downloadBtn}
@@ -253,6 +261,21 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
             </aside>
           )}
         </div>
+      )}
+
+      {lightboxOpen && canvasUrl && (
+        <Lightbox
+          items={
+            composedUrl
+              ? [
+                  { label: "원본", url: canvasUrl },
+                  { label: "번역본", url: composedUrl },
+                ]
+              : [{ label: "원본", url: canvasUrl }]
+          }
+          initialIndex={composedUrl && viewMode === "translated" ? 1 : 0}
+          onClose={() => setLightboxOpen(false)}
+        />
       )}
     </>
   );
