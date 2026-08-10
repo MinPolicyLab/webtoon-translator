@@ -1,0 +1,110 @@
+:root {
+  --bg: #f7f5f0;
+  --stage: #16151a;
+  --surface: #ffffff;
+  --surface-hover: #fbfaf7;
+  --border: #e7e3d9;
+  --border-strong: #d7d2c3;
+  --text: #201f1c;
+  --text-dim: #6b6558;
+  --text-faint: #9a9384;
+  --accent: #c05621;
+  --danger-bg: #fdecec;
+  --danger-text: #9c1f1f;
+  --danger-border: #f3c6c6;
+  --font-mono: "SF Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16151a;
+    --stage: #0c0b0f;
+    --surface: #201f26;
+    --surface-hover: #262530;
+    --border: #33323c;
+    --border-strong: #45434f;
+    --text: #f1ede4;
+    --text-dim: #a7a196;
+    --text-faint: #726c60;
+    --accent: #e2803f;
+    --danger-bg: #3a1c1c;
+    --danger-text: #ff9d9d;
+    --danger-border: #5c2a2a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #16151a;
+  --stage: #0c0b0f;
+  --surface: #201f26;
+  --surface-hover: #262530;
+  --border: #33323c;
+  --border-strong: #45434f;
+  --text: #f1ede4;
+  --text-dim: #a7a196;
+  --text-faint: #726c60;
+  --accent: #e2803f;
+  --danger-bg: #3a1c1c;
+  --danger-text: #ff9d9d;
+  --danger-border: #5c2a2a;
+}
+
+:root[data-theme="light"] {
+  --bg: #f7f5f0;
+  --stage: #16151a;
+  --surface: #ffffff;
+  --surface-hover: #fbfaf7;
+  --border: #e7e3d9;
+  --border-strong: #d7d2c3;
+  --text: #201f1c;
+  --text-dim: #6b6558;
+  --text-faint: #9a9384;
+  --accent: #c05621;
+  --danger-bg: #fdecec;
+  --danger-text: #9c1f1f;
+  --danger-border: #f3c6c6;
+}
+
+html {
+  height: 100%;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  background: var(--bg);
+  font-family: -apple-system, "Segoe UI", "Noto Sans KR", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+select,
+button,
+input {
+  font-family: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+  html {
+    color-scheme: dark;
+  }
+}
