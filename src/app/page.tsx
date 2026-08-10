@@ -5,6 +5,7 @@ import styles from "./page.module.css";
 import { runOcr, type OcrLine } from "@/lib/ocr";
 import { getPdfPageCount, renderPdfPageToCanvas } from "@/lib/pdf";
 import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from "@/lib/languages";
+import { composeTranslatedImage } from "@/lib/compose";
 
 type Status = "idle" | "loading-page" | "ocr" | "translating" | "done" | "error";
 
@@ -26,15 +27,14 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState("");
   const [provider, setProvider] = useState<string | null>(null);
 
-  const [imageWidth, setImageWidth] = useState(0);
-  const [imageHeight, setImageHeight] = useState(0);
   const [lines, setLines] = useState<LinePair[]>([]);
-  const [showOverlay, setShowOverlay] = useState(true);
+  const [viewMode, setViewMode] = useState<"translated" | "original">("translated");
   const [showOriginal, setShowOriginal] = useState(false);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
+  const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [canvasUrl, setCanvasUrl] = useState<string>("");
+  const [composedUrl, setComposedUrl] = useState<string>("");
+  const [composing, setComposing] = useState(false);
 
   const process = useCallback(
     async (targetFile: File, kind: "image" | "pdf", targetPage: number) => {
@@ -43,6 +43,7 @@ export default function Home() {
       setLines([]);
       setProvider(null);
       setProgress(0);
+      setComposedUrl("");
 
       try {
         let canvas: HTMLCanvasElement;
@@ -51,8 +52,7 @@ export default function Home() {
         } else {
           canvas = await imageFileToCanvas(targetFile);
         }
-        setImageWidth(canvas.width);
-        setImageHeight(canvas.height);
+        sourceCanvasRef.current = canvas;
         setCanvasUrl(canvas.toDataURL("image/png"));
 
         setStatus("ocr");
@@ -122,12 +122,33 @@ export default function Home() {
   );
 
   useEffect(() => {
+    // Re-runs the OCR+translate pipeline whenever the page or languages
+    // change; `process` itself is intentionally excluded from deps since
+    // it's re-created every render but its identity isn't what should
+    // trigger a re-run here.
     if (file && fileKind) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void process(file, fileKind, pageIndex);
     }
-    // re-run whenever the page, source, or target language changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageIndex, sourceCode, targetCode]);
+
+  useEffect(() => {
+    const source = sourceCanvasRef.current;
+    if (!source || lines.length === 0 || !lines.some((l) => l.translated)) {
+      setComposedUrl("");
+      return;
+    }
+    setComposing(true);
+    try {
+      const composed = composeTranslatedImage(source, lines);
+      setComposedUrl(composed.toDataURL("image/png"));
+    } catch (err) {
+      console.error("compose error", err);
+    } finally {
+      setComposing(false);
+    }
+  }, [lines]);
 
   const onDrop = useCallback(
     (e: React.DragEvent<HTMLLabelElement>) => {
@@ -151,8 +172,9 @@ export default function Home() {
 
       <p className={styles.subhead}>
         이미지(JPG/PNG/WebP) 또는 PDF 파일을 직접 올리면, 브라우저에서 글자를 인식(OCR)한 뒤
-        번역 API로 번역해 원본 위에 겹쳐 보여줍니다. 다른 웹사이트의 화면을 읽어오는 기능은
-        아니며, 사용자가 올린 파일만 처리합니다.
+        말풍선 배경색을 읽어 그 위에 원문을 지우고 번역문을 다시 그려 넣습니다. 결과 이미지를
+        그대로 다운로드할 수 있습니다. 다른 웹사이트의 화면을 읽어오는 기능은 아니며, 사용자가
+        올린 파일만 처리합니다.
       </p>
 
       <label
@@ -234,14 +256,27 @@ export default function Home() {
           </label>
         )}
 
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
-            checked={showOverlay}
-            onChange={(e) => setShowOverlay(e.target.checked)}
-          />
-          <span>번역 오버레이 표시</span>
-        </label>
+        {composedUrl && (
+          <div className={styles.field}>
+            <span>화면</span>
+            <div className={styles.pager}>
+              <button
+                type="button"
+                className={viewMode === "translated" ? styles.pagerActive : undefined}
+                onClick={() => setViewMode("translated")}
+              >
+                번역본
+              </button>
+              <button
+                type="button"
+                className={viewMode === "original" ? styles.pagerActive : undefined}
+                onClick={() => setViewMode("original")}
+              >
+                원본
+              </button>
+            </div>
+          </div>
+        )}
 
         <label className={styles.toggle}>
           <input
@@ -249,8 +284,18 @@ export default function Home() {
             checked={showOriginal}
             onChange={(e) => setShowOriginal(e.target.checked)}
           />
-          <span>원문도 함께 표시</span>
+          <span>목록에 원문도 함께 표시</span>
         </label>
+
+        {composedUrl && (
+          <a
+            className={styles.downloadBtn}
+            href={composedUrl}
+            download={`${(file?.name ?? "translated").replace(/\.[^.]+$/, "")}-translated.png`}
+          >
+            번역 이미지 다운로드
+          </a>
+        )}
       </div>
 
       {isBusy && (
@@ -272,25 +317,16 @@ export default function Home() {
 
       {canvasUrl && (
         <div className={styles.workArea}>
-          <div className={styles.previewWrap} ref={previewRef}>
+          <div className={styles.previewWrap}>
+            {composing && (
+              <div className={styles.composingBadge}>말풍선에 번역문을 그려 넣는 중...</div>
+            )}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={canvasUrl} alt="업로드한 페이지" className={styles.previewImage} />
-            {showOverlay &&
-              lines.map((line) => (
-                <div
-                  key={line.id}
-                  className={styles.overlayBox}
-                  style={{
-                    left: `${(line.bbox.x0 / imageWidth) * 100}%`,
-                    top: `${(line.bbox.y0 / imageHeight) * 100}%`,
-                    width: `${((line.bbox.x1 - line.bbox.x0) / imageWidth) * 100}%`,
-                    height: `${((line.bbox.y1 - line.bbox.y0) / imageHeight) * 100}%`,
-                  }}
-                  title={line.text}
-                >
-                  <span>{line.translated ?? "…"}</span>
-                </div>
-              ))}
+            <img
+              src={viewMode === "translated" && composedUrl ? composedUrl : canvasUrl}
+              alt={viewMode === "translated" && composedUrl ? "번역된 페이지" : "원본 페이지"}
+              className={styles.previewImage}
+            />
           </div>
 
           {lines.length > 0 && (
@@ -312,7 +348,6 @@ export default function Home() {
         </div>
       )}
 
-      <canvas ref={canvasRef} style={{ display: "none" }} />
     </div>
   );
 }

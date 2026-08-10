@@ -43,3 +43,5 @@ next-env.d.ts
 
 # tesseract.js downloaded language models
 *.traineddata
+
+.vercel
