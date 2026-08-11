@@ -5,6 +5,7 @@ import styles from "./page.module.css";
 import { getPdfPageCount, renderPdfPageToCanvas } from "@/lib/pdf";
 import { processCanvas, type PageResult } from "@/lib/pipeline";
 import Lightbox from "./Lightbox";
+import InteractiveOverlay, { type InteractionMode } from "./InteractiveOverlay";
 
 type Status = "idle" | "loading-page" | "ocr" | "translating" | "done" | "error";
 
@@ -23,7 +24,8 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
   const [progress, setProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
   const [result, setResult] = useState<PageResult | null>(null);
-  const [viewMode, setViewMode] = useState<"translated" | "original">("translated");
+  const [viewMode, setViewMode] = useState<"translated" | "original" | "interactive">("translated");
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("click");
   const [showOriginal, setShowOriginal] = useState(false);
   const [autoDetectLang, setAutoDetectLang] = useState(true);
   const [bubbleOnly, setBubbleOnly] = useState(true);
@@ -170,10 +172,39 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
               </button>
               <button
                 type="button"
+                className={viewMode === "interactive" ? styles.pagerActive : undefined}
+                onClick={() => setViewMode("interactive")}
+              >
+                원본+클릭 번역
+              </button>
+              <button
+                type="button"
                 className={viewMode === "original" ? styles.pagerActive : undefined}
                 onClick={() => setViewMode("original")}
               >
                 원본
+              </button>
+            </div>
+          </div>
+        )}
+
+        {composedUrl && viewMode === "interactive" && (
+          <div className={styles.field}>
+            <span>보기 방식</span>
+            <div className={styles.pager}>
+              <button
+                type="button"
+                className={interactionMode === "click" ? styles.pagerActive : undefined}
+                onClick={() => setInteractionMode("click")}
+              >
+                클릭
+              </button>
+              <button
+                type="button"
+                className={interactionMode === "drag" ? styles.pagerActive : undefined}
+                onClick={() => setInteractionMode("drag")}
+              >
+                드래그
               </button>
             </div>
           </div>
@@ -232,16 +263,34 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
         <p className={styles.emptyBox}>이 페이지에서 인식할 수 있는 글자를 찾지 못했습니다.</p>
       )}
 
+      {canvasUrl && viewMode === "interactive" && result && result.sourceCanvas && lines.length > 0 && (
+        <p className={styles.interactiveHint}>
+          {interactionMode === "click"
+            ? "점선으로 표시된 부분을 클릭하면 번역이 뜹니다. 다시 클릭하면 닫힙니다."
+            : "번역을 보고 싶은 영역을 마우스로 드래그해서 선택하세요. 이미 열려있으면 다시 드래그해서 닫을 수 있습니다."}
+        </p>
+      )}
+
       {canvasUrl && (
         <div className={styles.workArea}>
-          <div className={styles.previewWrap}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={viewMode === "translated" && composedUrl ? composedUrl : canvasUrl}
-              alt={viewMode === "translated" && composedUrl ? "번역된 페이지" : "원본 페이지"}
-              className={styles.previewImage}
+          {viewMode === "interactive" && result ? (
+            <InteractiveOverlay
+              imageUrl={canvasUrl}
+              lines={lines}
+              imageWidth={result.sourceCanvas.width}
+              imageHeight={result.sourceCanvas.height}
+              mode={interactionMode}
             />
-          </div>
+          ) : (
+            <div className={styles.previewWrap}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={viewMode === "translated" && composedUrl ? composedUrl : canvasUrl}
+                alt={viewMode === "translated" && composedUrl ? "번역된 페이지" : "원본 페이지"}
+                className={styles.previewImage}
+              />
+            </div>
+          )}
 
           {lines.length > 0 && (
             <aside className={styles.linePanel}>
