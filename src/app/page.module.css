@@ -355,6 +355,11 @@
   border: 1px solid var(--border-strong);
 }
 
+.skippedNote {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
 .tagGroup {
   display: flex;
   align-items: center;

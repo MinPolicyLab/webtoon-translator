@@ -18,6 +18,7 @@ interface BatchItem {
   errorMsg?: string;
   autoDetected?: boolean;
   usedSourceCode?: string;
+  skippedOutsideBubble?: number;
 }
 
 interface Props {
@@ -32,6 +33,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
   const [running, setRunning] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [autoDetectLang, setAutoDetectLang] = useState(true);
+  const [bubbleOnly, setBubbleOnly] = useState(true);
   const [lightboxId, setLightboxId] = useState<string | null>(null);
 
   const stopRef = useRef(false);
@@ -78,7 +80,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
 
       try {
         const canvas = await item.getCanvas();
-        const result = await processCanvas(canvas, sourceCode, targetCode, undefined, autoDetectLang);
+        const result = await processCanvas(canvas, sourceCode, targetCode, undefined, autoDetectLang, bubbleOnly);
         const composedUrl = (result.composedCanvas ?? canvas).toDataURL("image/png");
         setItems((prev) =>
           prev.map((it) =>
@@ -90,6 +92,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
                   lineCount: result.lines.length,
                   autoDetected: result.autoDetected,
                   usedSourceCode: result.usedSourceCode,
+                  skippedOutsideBubble: result.skippedOutsideBubble,
                 }
               : it
           )
@@ -107,7 +110,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
     }
 
     setRunning(false);
-  }, [workItems, sourceCode, targetCode, autoDetectLang]);
+  }, [workItems, sourceCode, targetCode, autoDetectLang, bubbleOnly]);
 
   const stopBatch = useCallback(() => {
     stopRef.current = true;
@@ -199,6 +202,16 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
               />
               <span>여러 언어가 섞여 있어도 한 번에 인식 (다국어 자동 인식)</span>
             </label>
+
+            <label className={styles.toggle}>
+              <input
+                type="checkbox"
+                checked={bubbleOnly}
+                disabled={running}
+                onChange={(e) => setBubbleOnly(e.target.checked)}
+              />
+              <span>말풍선 안의 글자만 번역 (효과음·제목 글자는 원본 유지)</span>
+            </label>
           </div>
 
           {(running || processedCount > 0) && (
@@ -233,6 +246,9 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
                     {it.label}
                   </span>
                   {it.autoDetected && <span className={styles.autoTag}>다국어 자동 인식</span>}
+                  {!!it.skippedOutsideBubble && (
+                    <span className={styles.skippedNote}>말풍선 밖 {it.skippedOutsideBubble}줄 원본 유지</span>
+                  )}
                   {it.status === "done" && (
                     <a href={it.composedUrl} download={`${it.label.replace(/\.[^.]+$/, "")}-translated.png`}>
                       다운로드

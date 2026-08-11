@@ -26,6 +26,7 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
   const [viewMode, setViewMode] = useState<"translated" | "original">("translated");
   const [showOriginal, setShowOriginal] = useState(false);
   const [autoDetectLang, setAutoDetectLang] = useState(true);
+  const [bubbleOnly, setBubbleOnly] = useState(true);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const [canvasUrl, setCanvasUrl] = useState<string>("");
@@ -51,7 +52,8 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
           targetCode,
           (p) => setProgress(p),
           setStatus,
-          autoDetectLang
+          autoDetectLang,
+          bubbleOnly
         );
 
         setResult(pageResult);
@@ -65,7 +67,7 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
         setStatus("error");
       }
     },
-    [sourceCode, targetCode, autoDetectLang]
+    [sourceCode, targetCode, autoDetectLang, bubbleOnly]
   );
 
   const handleFileChange = useCallback(
@@ -98,7 +100,7 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
     // Re-runs whenever the page, languages, or auto-detect toggle change;
     // `run`'s identity is intentionally not a dependency here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageIndex, sourceCode, targetCode, autoDetectLang]);
+  }, [pageIndex, sourceCode, targetCode, autoDetectLang, bubbleOnly]);
 
   const onDrop = useCallback(
     (e: React.DragEvent<HTMLLabelElement>) => {
@@ -187,6 +189,11 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
         </label>
 
         <label className={styles.toggle}>
+          <input type="checkbox" checked={bubbleOnly} onChange={(e) => setBubbleOnly(e.target.checked)} />
+          <span>말풍선 안의 글자만 번역 (효과음·제목 글자는 원본 유지)</span>
+        </label>
+
+        <label className={styles.toggle}>
           <input type="checkbox" checked={showOriginal} onChange={(e) => setShowOriginal(e.target.checked)} />
           <span>목록에 원문도 함께 표시</span>
         </label>
@@ -239,7 +246,12 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
           {lines.length > 0 && (
             <aside className={styles.linePanel}>
               <div className={styles.linePanelHeader}>
-                <span>인식된 대사 {lines.length}줄</span>
+                <span>
+                  말풍선 대사 {lines.length}줄
+                  {!!result?.skippedOutsideBubble && (
+                    <span className={styles.skippedNote}> (말풍선 밖 {result.skippedOutsideBubble}줄은 원본 유지)</span>
+                  )}
+                </span>
                 <span className={styles.tagGroup}>
                   {result?.autoDetected && <span className={styles.autoTag}>다국어 자동 인식</span>}
                   {result?.provider && <span className={styles.providerTag}>{result.provider}</span>}
@@ -282,7 +294,8 @@ async function processCanvasWithPhase(
   targetCode: string,
   onOcrProgress: (fraction: number) => void,
   setStatus: (s: Status) => void,
-  autoDetectLang: boolean
+  autoDetectLang: boolean,
+  bubbleOnly: boolean
 ): Promise<PageResult> {
   const result = await processCanvas(
     canvas,
@@ -292,7 +305,8 @@ async function processCanvasWithPhase(
       onOcrProgress(p);
       if (p > 0) setStatus("ocr");
     },
-    autoDetectLang
+    autoDetectLang,
+    bubbleOnly
   );
   if (result.lines.length > 0) setStatus("translating");
   return result;

@@ -1,6 +1,7 @@
 import { runOcr, type OcrLine } from "./ocr";
 import { composeTranslatedImage, type ComposableLine } from "./compose";
 import { AUTO_LANG, COMBINED_OCR_LANGS } from "./languages";
+import { detectBubbles, isInsideAnyBubble } from "./bubbles";
 
 export interface TranslateApiResult {
   translations: string[];
@@ -35,6 +36,8 @@ export interface PageResult {
   usedSourceCode: string;
   /** True when multi-language mode ran instead of the single requested language. */
   autoDetected: boolean;
+  /** How many recognized lines were outside any detected bubble and left untouched. */
+  skippedOutsideBubble: number;
 }
 
 /**
@@ -49,19 +52,31 @@ export interface PageResult {
  *    Japanese sound effects, say) gets each line read in its own script
  *    instead of the whole page being forced into one language. Translation
  *    then auto-detects the source language per line to match.
+ *
+ * `bubbleOnly` (default on) restricts translation to lines that fall
+ * inside a detected speech bubble. Large title lettering and sound
+ * effects are usually drawn straight onto the art rather than inside an
+ * enclosed bubble shape, don't need translating to be understood, and
+ * erasing them would cost image quality for no benefit — so they're left
+ * completely untouched rather than boxed over.
  */
 export async function processCanvas(
   canvas: HTMLCanvasElement,
   sourceOcrCode: string,
   targetTranslateCode: string,
   onOcrProgress?: (fraction: number) => void,
-  autoDetectLang = true
+  autoDetectLang = true,
+  bubbleOnly = true
 ): Promise<PageResult> {
   const usedSourceCode = autoDetectLang ? AUTO_LANG : sourceOcrCode;
   const ocrLangArg = autoDetectLang ? COMBINED_OCR_LANGS : sourceOcrCode;
   const ocrResult = await runOcr(canvas, ocrLangArg, onOcrProgress);
 
-  if (ocrResult.lines.length === 0) {
+  const bubbles = bubbleOnly ? detectBubbles(canvas) : [];
+  const candidateLines = bubbleOnly ? ocrResult.lines.filter((l) => isInsideAnyBubble(l.bbox, bubbles)) : ocrResult.lines;
+  const skippedOutsideBubble = ocrResult.lines.length - candidateLines.length;
+
+  if (candidateLines.length === 0) {
     return {
       lines: [],
       provider: null,
@@ -69,22 +84,31 @@ export async function processCanvas(
       composedCanvas: null,
       usedSourceCode,
       autoDetected: autoDetectLang,
+      skippedOutsideBubble,
     };
   }
 
   const { translations, provider } = await translateLines(
-    ocrResult.lines.map((l) => l.text),
+    candidateLines.map((l) => l.text),
     usedSourceCode,
     targetTranslateCode
   );
 
-  const lines: ComposableLine[] = ocrResult.lines.map((line, i) => ({
+  const lines: ComposableLine[] = candidateLines.map((line, i) => ({
     ...line,
     translated: translations[i] ?? null,
   }));
 
   const composedCanvas = composeTranslatedImage(canvas, lines);
-  return { lines, provider, sourceCanvas: canvas, composedCanvas, usedSourceCode, autoDetected: autoDetectLang };
+  return {
+    lines,
+    provider,
+    sourceCanvas: canvas,
+    composedCanvas,
+    usedSourceCode,
+    autoDetected: autoDetectLang,
+    skippedOutsideBubble,
+  };
 }
 
 export type { OcrLine };
