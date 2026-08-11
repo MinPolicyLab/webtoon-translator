@@ -1,4 +1,4 @@
-import { createWorker } from "tesseract.js";
+import { createWorker, PSM } from "tesseract.js";
 
 export interface OcrLine {
   id: string;
@@ -13,7 +13,23 @@ export interface OcrResult {
   imageHeight: number;
 }
 
-const MIN_CONFIDENCE = 35;
+const MIN_CONFIDENCE = 30;
+
+/**
+ * Grayscale + contrast boost, so text sitting on busy line art or a
+ * textured background stands out more clearly to the recognizer. Same
+ * dimensions as the source, so bbox coordinates stay valid against it.
+ */
+function preprocessForOcr(source: HTMLCanvasElement): HTMLCanvasElement {
+  const pre = document.createElement("canvas");
+  pre.width = source.width;
+  pre.height = source.height;
+  const ctx = pre.getContext("2d");
+  if (!ctx) return source;
+  ctx.filter = "grayscale(1) contrast(1.6) brightness(1.08)";
+  ctx.drawImage(source, 0, 0);
+  return pre;
+}
 
 // A real speech-bubble line is a small fraction of the page. Tesseract
 // occasionally mis-segments background art or paper texture as a "line"
@@ -52,7 +68,15 @@ export async function runOcr(
   });
 
   try {
-    const { data } = await worker.recognize(source, {}, { blocks: true, text: true });
+    // Webtoon/manga text often sits scattered in small clusters over dense
+    // line art rather than filling the page — AUTO segmentation (the
+    // default) is tuned for regular documents and can miss it entirely.
+    // SPARSE_TEXT looks for text anywhere on the page without assuming a
+    // regular layout, which fits this case much better.
+    await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
+
+    const ocrSource = source instanceof HTMLCanvasElement ? preprocessForOcr(source) : source;
+    const { data } = await worker.recognize(ocrSource, {}, { blocks: true, text: true });
 
     const lines: OcrLine[] = [];
     let i = 0;
