@@ -2,10 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
+import type { ComposableLine } from "@/lib/compose";
+import InteractiveOverlay, { type InteractionMode } from "./InteractiveOverlay";
 
 export interface LightboxItem {
   label: string;
   url: string;
+  /** Untouched original page — enables the "원본" and interactive views. */
+  sourceUrl?: string;
+  /** Recognized bubble lines — presence of this is what turns on the
+   * interactive click/drag view toggle for this item. */
+  lines?: ComposableLine[];
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 interface Props {
@@ -14,6 +23,8 @@ interface Props {
   initialSpread?: boolean;
   onClose: () => void;
 }
+
+type ViewMode = "translated" | "interactive" | "original";
 
 export default function Lightbox({ items, initialIndex, initialSpread = false, onClose }: Props) {
   const wantsSpread = initialSpread && items.length > 1;
@@ -25,6 +36,8 @@ export default function Lightbox({ items, initialIndex, initialSpread = false, o
     return wantsSpread && start >= items.length - 1 ? Math.max(0, start - 1) : start;
   });
   const [spread, setSpread] = useState(wantsSpread);
+  const [viewMode, setViewMode] = useState<ViewMode>("translated");
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("click");
 
   const step = spread ? 2 : 1;
   const clamp = useCallback((i: number) => Math.max(0, Math.min(items.length - 1, i)), [items.length]);
@@ -61,6 +74,33 @@ export default function Lightbox({ items, initialIndex, initialSpread = false, o
 
   const current = items[index];
   const second = spread ? items[index + 1] : undefined;
+  // The interactive/원본 toggle only makes sense for items that carry OCR
+  // line data (currently only the batch grid supplies this) — single-file's
+  // 원본/번역본 pairing has its own separate interactive view outside the
+  // lightbox, so those items simply won't show the extra toggle.
+  const supportsInteractive = !!current.lines && current.lines.length > 0;
+
+  function renderPage(item: LightboxItem, alt: string) {
+    if (viewMode === "interactive" && item.lines && item.sourceUrl && item.imageWidth && item.imageHeight) {
+      return (
+        <div
+          className={styles.lightboxInteractiveWrap}
+          style={{ aspectRatio: `${item.imageWidth} / ${item.imageHeight}` }}
+        >
+          <InteractiveOverlay
+            imageUrl={item.sourceUrl}
+            lines={item.lines}
+            imageWidth={item.imageWidth}
+            imageHeight={item.imageHeight}
+            mode={interactionMode}
+          />
+        </div>
+      );
+    }
+    const src = viewMode === "original" ? (item.sourceUrl ?? item.url) : item.url;
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={src} alt={alt} />;
+  }
 
   return (
     <div className={styles.lightboxBackdrop} onClick={onClose} role="dialog" aria-modal="true">
@@ -69,6 +109,49 @@ export default function Lightbox({ items, initialIndex, initialSpread = false, o
           {second ? `${index + 1}–${index + 2}` : `${index + 1}`} / {items.length}
         </span>
         <div className={styles.lightboxTools}>
+          {supportsInteractive && (
+            <>
+              <button
+                type="button"
+                className={viewMode === "translated" ? styles.pagerActive : undefined}
+                onClick={() => setViewMode("translated")}
+              >
+                번역본
+              </button>
+              <button
+                type="button"
+                className={viewMode === "interactive" ? styles.pagerActive : undefined}
+                onClick={() => setViewMode("interactive")}
+              >
+                원본+클릭 번역
+              </button>
+              <button
+                type="button"
+                className={viewMode === "original" ? styles.pagerActive : undefined}
+                onClick={() => setViewMode("original")}
+              >
+                원본
+              </button>
+            </>
+          )}
+          {supportsInteractive && viewMode === "interactive" && (
+            <>
+              <button
+                type="button"
+                className={interactionMode === "click" ? styles.pagerActive : undefined}
+                onClick={() => setInteractionMode("click")}
+              >
+                클릭
+              </button>
+              <button
+                type="button"
+                className={interactionMode === "drag" ? styles.pagerActive : undefined}
+                onClick={() => setInteractionMode("drag")}
+              >
+                드래그
+              </button>
+            </>
+          )}
           <button type="button" className={!spread ? styles.pagerActive : undefined} onClick={() => setSpread(false)}>
             1장
           </button>
@@ -95,12 +178,8 @@ export default function Lightbox({ items, initialIndex, initialSpread = false, o
         </button>
 
         <div className={styles.lightboxImages} data-spread={second ? "true" : "false"}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={current.url} alt={current.label} />
-          {second && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={second.url} alt={second.label} />
-          )}
+          {renderPage(current, current.label)}
+          {second && renderPage(second, second.label)}
         </div>
 
         <button

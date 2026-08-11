@@ -533,6 +533,22 @@
   max-width: 46vw;
 }
 
+/* Sizes the interactive click/drag overlay the same way the plain <img>
+   above is sized, since it's a div (not an img) and so doesn't pick up
+   max-height/object-fit the same way — the aspect-ratio is set inline from
+   the page's known pixel dimensions so this box's height stays in sync with
+   its width instead of relying on an intrinsic image size. */
+.lightboxInteractiveWrap {
+  max-width: 100%;
+  max-height: 82vh;
+  border-radius: 6px;
+  background: #111;
+  overflow: hidden;
+}
+.lightboxImages[data-spread="true"] .lightboxInteractiveWrap {
+  max-width: 46vw;
+}
+
 .lightboxLabel {
   flex-shrink: 0;
   text-align: center;
@@ -549,6 +565,10 @@
     flex-direction: column;
   }
   .lightboxImages[data-spread="true"] img {
+    max-width: 100%;
+    max-height: 40vh;
+  }
+  .lightboxImages[data-spread="true"] .lightboxInteractiveWrap {
     max-width: 100%;
     max-height: 40vh;
   }

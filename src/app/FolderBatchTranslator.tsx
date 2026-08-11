@@ -5,6 +5,7 @@ import JSZip from "jszip";
 import styles from "./page.module.css";
 import { buildWorkItems, type WorkItem } from "@/lib/batch";
 import { processCanvas } from "@/lib/pipeline";
+import type { ComposableLine } from "@/lib/compose";
 import Lightbox from "./Lightbox";
 
 type ItemStatus = "pending" | "processing" | "done" | "error";
@@ -14,6 +15,10 @@ interface BatchItem {
   label: string;
   status: ItemStatus;
   composedUrl?: string;
+  sourceUrl?: string;
+  lines?: ComposableLine[];
+  imageWidth?: number;
+  imageHeight?: number;
   lineCount?: number;
   errorMsg?: string;
   autoDetected?: boolean;
@@ -82,6 +87,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
         const canvas = await item.getCanvas();
         const result = await processCanvas(canvas, sourceCode, targetCode, undefined, autoDetectLang, bubbleOnly);
         const composedUrl = (result.composedCanvas ?? canvas).toDataURL("image/png");
+        const sourceUrl = canvas.toDataURL("image/png");
         setItems((prev) =>
           prev.map((it) =>
             it.id === item.id
@@ -89,6 +95,10 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
                   ...it,
                   status: "done",
                   composedUrl,
+                  sourceUrl,
+                  lines: result.lines,
+                  imageWidth: result.sourceCanvas.width,
+                  imageHeight: result.sourceCanvas.height,
                   lineCount: result.lines.length,
                   autoDetected: result.autoDetected,
                   usedSourceCode: result.usedSourceCode,
@@ -138,7 +148,14 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
   const errorCount = items.filter((it) => it.status === "error").length;
   const processedCount = doneCount + errorCount;
 
-  const previewItems = doneItems.map((it) => ({ label: it.label, url: it.composedUrl! }));
+  const previewItems = doneItems.map((it) => ({
+    label: it.label,
+    url: it.composedUrl!,
+    sourceUrl: it.sourceUrl,
+    lines: it.lines,
+    imageWidth: it.imageWidth,
+    imageHeight: it.imageHeight,
+  }));
   const lightboxIndex = lightboxId ? doneItems.findIndex((it) => it.id === lightboxId) : -1;
 
   return (
