@@ -5,7 +5,6 @@ import JSZip from "jszip";
 import styles from "./page.module.css";
 import { buildWorkItems, type WorkItem } from "@/lib/batch";
 import { processCanvas } from "@/lib/pipeline";
-import { findSourceLanguage } from "@/lib/languages";
 import Lightbox from "./Lightbox";
 
 type ItemStatus = "pending" | "processing" | "done" | "error";
@@ -198,7 +197,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
                 disabled={running}
                 onChange={(e) => setAutoDetectLang(e.target.checked)}
               />
-              <span>지원 언어 모두 확인해서 가장 정확한 언어 자동 선택</span>
+              <span>여러 언어가 섞여 있어도 한 번에 인식 (다국어 자동 인식)</span>
             </label>
           </div>
 
@@ -233,11 +232,7 @@ export default function FolderBatchTranslator({ sourceCode, targetCode }: Props)
                   <span className={styles.batchLabel} title={it.label}>
                     {it.label}
                   </span>
-                  {it.autoDetected && it.usedSourceCode && (
-                    <span className={styles.autoTag}>
-                      자동 감지: {findSourceLanguage(it.usedSourceCode).label}
-                    </span>
-                  )}
+                  {it.autoDetected && <span className={styles.autoTag}>다국어 자동 인식</span>}
                   {it.status === "done" && (
                     <a href={it.composedUrl} download={`${it.label.replace(/\.[^.]+$/, "")}-translated.png`}>
                       다운로드

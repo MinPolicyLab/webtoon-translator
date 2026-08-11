@@ -33,6 +33,17 @@ export function findSourceLanguage(ocrCode: string): LanguageOption {
   return SOURCE_LANGUAGES.find((l) => l.ocrCode === ocrCode) ?? SOURCE_LANGUAGES[0];
 }
 
+/** Marker used when a page's language isn't fixed to one selection. */
+export const AUTO_LANG = "auto";
+
+/**
+ * Tesseract can recognize several languages in a single pass by combining
+ * their trained-data packs, which is what lets one page mix scripts (e.g.
+ * Korean dialogue with Japanese sound effects) instead of forcing the whole
+ * page into one language.
+ */
+export const COMBINED_OCR_LANGS = SOURCE_LANGUAGES.map((l) => l.ocrCode).join("+");
+
 export function findTargetLanguage(translateCode: string): TargetLanguageOption {
   return TARGET_LANGUAGES.find((l) => l.translateCode === translateCode) ?? TARGET_LANGUAGES[0];
 }

@@ -31,7 +31,19 @@ export async function runOcr(
   const dims = await getSourceDimensions(source);
   const pageArea = dims.width * dims.height;
 
+  // The worker script and WASM core are self-hosted (relative paths resolve
+  // fine here — only inside a blob-wrapped worker does a relative path
+  // become ambiguous) rather than left on tesseract.js's default CDN.
+  // Loading them cross-origin turned out to fail intermittently with no
+  // visible error (recognize() just silently returns zero blocks), and
+  // once from a blob-URL worker it failed outright with a same-origin
+  // Worker-construction error. Trained-data downloads (langPath) are left
+  // on the default CDN since those are fetched normally, not the failure
+  // point observed here.
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
   const worker = await createWorker(langCode, undefined, {
+    workerPath: `${origin}/tesseract/worker.min.js`,
+    corePath: `${origin}/tesseract/core/`,
     logger: (m) => {
       if (m.status === "recognizing text" && typeof m.progress === "number") {
         onProgress?.(m.progress);

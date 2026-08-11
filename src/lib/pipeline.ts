@@ -1,6 +1,6 @@
 import { runOcr, type OcrLine } from "./ocr";
 import { composeTranslatedImage, type ComposableLine } from "./compose";
-import { SOURCE_LANGUAGES } from "./languages";
+import { AUTO_LANG, COMBINED_OCR_LANGS } from "./languages";
 
 export interface TranslateApiResult {
   translations: string[];
@@ -31,63 +31,24 @@ export interface PageResult {
   provider: string | null;
   sourceCanvas: HTMLCanvasElement;
   composedCanvas: HTMLCanvasElement | null;
-  /** The OCR language actually used — may differ from the requested one if auto-detect kicked in. */
+  /** The OCR language(s) actually used — "auto" when multi-language mode ran. */
   usedSourceCode: string;
-  /** True when the requested language found nothing and a different one was tried instead. */
+  /** True when multi-language mode ran instead of the single requested language. */
   autoDetected: boolean;
-}
-
-type OcrResult = Awaited<ReturnType<typeof runOcr>>;
-
-// A model given the wrong script doesn't reliably return nothing — it can
-// force-fit glyphs and report a handful of "confident" but nonsensical
-// lines (verified against Latin text run through a Thai model). So instead
-// of trusting "any lines at all", every candidate is scored by how much
-// confident text it found, and the best-scoring one wins.
-function scoreOcrResult(result: OcrResult): number {
-  if (result.lines.length === 0) return 0;
-  const avgConfidence = result.lines.reduce((sum, l) => sum + l.confidence, 0) / result.lines.length;
-  return avgConfidence * Math.min(result.lines.length, 5);
-}
-
-/**
- * Runs OCR with every supported language and keeps whichever one scored
- * best. A "good enough" early exit was tried first, but wrong-language OCR
- * can still rack up a passable score across several force-fit lines (seen
- * with a Thai model reading Latin text), so it wasn't reliable — checking
- * every language against every page is the only way that consistently
- * catches the actual best match.
- */
-async function ocrWithLanguageFallback(
-  canvas: HTMLCanvasElement,
-  sourceOcrCode: string,
-  autoDetectLang: boolean,
-  onOcrProgress?: (fraction: number) => void
-): Promise<{ ocrResult: OcrResult; usedSourceCode: string; autoDetected: boolean }> {
-  const primary = await runOcr(canvas, sourceOcrCode, onOcrProgress);
-
-  if (!autoDetectLang) {
-    return { ocrResult: primary, usedSourceCode: sourceOcrCode, autoDetected: false };
-  }
-
-  let best = { code: sourceOcrCode, result: primary, score: scoreOcrResult(primary) };
-  const candidates = SOURCE_LANGUAGES.map((l) => l.ocrCode).filter((code) => code !== sourceOcrCode);
-
-  for (const candidate of candidates) {
-    const attempt = await runOcr(canvas, candidate);
-    const score = scoreOcrResult(attempt);
-    if (score > best.score) {
-      best = { code: candidate, result: attempt, score };
-    }
-  }
-
-  return { ocrResult: best.result, usedSourceCode: best.code, autoDetected: best.code !== sourceOcrCode };
 }
 
 /**
  * Runs OCR on a rendered page canvas, translates every recognized line, and
  * paints the translations back onto a copy of the canvas. Shared by both
  * the single-file flow and the folder batch flow so they can't drift apart.
+ *
+ * `autoDetectLang` switches between two OCR strategies:
+ *  - off: recognize with only the requested language.
+ *  - on (default): recognize with every supported language loaded into one
+ *    Tesseract pass, so a page mixing scripts (Korean dialogue next to
+ *    Japanese sound effects, say) gets each line read in its own script
+ *    instead of the whole page being forced into one language. Translation
+ *    then auto-detects the source language per line to match.
  */
 export async function processCanvas(
   canvas: HTMLCanvasElement,
@@ -96,12 +57,9 @@ export async function processCanvas(
   onOcrProgress?: (fraction: number) => void,
   autoDetectLang = true
 ): Promise<PageResult> {
-  const { ocrResult, usedSourceCode, autoDetected } = await ocrWithLanguageFallback(
-    canvas,
-    sourceOcrCode,
-    autoDetectLang,
-    onOcrProgress
-  );
+  const usedSourceCode = autoDetectLang ? AUTO_LANG : sourceOcrCode;
+  const ocrLangArg = autoDetectLang ? COMBINED_OCR_LANGS : sourceOcrCode;
+  const ocrResult = await runOcr(canvas, ocrLangArg, onOcrProgress);
 
   if (ocrResult.lines.length === 0) {
     return {
@@ -110,7 +68,7 @@ export async function processCanvas(
       sourceCanvas: canvas,
       composedCanvas: null,
       usedSourceCode,
-      autoDetected,
+      autoDetected: autoDetectLang,
     };
   }
 
@@ -126,7 +84,7 @@ export async function processCanvas(
   }));
 
   const composedCanvas = composeTranslatedImage(canvas, lines);
-  return { lines, provider, sourceCanvas: canvas, composedCanvas, usedSourceCode, autoDetected };
+  return { lines, provider, sourceCanvas: canvas, composedCanvas, usedSourceCode, autoDetected: autoDetectLang };
 }
 
 export type { OcrLine };

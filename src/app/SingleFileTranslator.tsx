@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
 import { getPdfPageCount, renderPdfPageToCanvas } from "@/lib/pdf";
 import { processCanvas, type PageResult } from "@/lib/pipeline";
-import { findSourceLanguage } from "@/lib/languages";
 import Lightbox from "./Lightbox";
 
 type Status = "idle" | "loading-page" | "ocr" | "translating" | "done" | "error";
@@ -184,7 +183,7 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
             checked={autoDetectLang}
             onChange={(e) => setAutoDetectLang(e.target.checked)}
           />
-          <span>지원 언어 모두 확인해서 가장 정확한 언어 자동 선택</span>
+          <span>여러 언어가 섞여 있어도 한 번에 인식 (다국어 자동 인식)</span>
         </label>
 
         <label className={styles.toggle}>
@@ -242,11 +241,7 @@ export default function SingleFileTranslator({ sourceCode, targetCode }: Props) 
               <div className={styles.linePanelHeader}>
                 <span>인식된 대사 {lines.length}줄</span>
                 <span className={styles.tagGroup}>
-                  {result?.autoDetected && (
-                    <span className={styles.autoTag}>
-                      자동 감지: {findSourceLanguage(result.usedSourceCode).label}
-                    </span>
-                  )}
+                  {result?.autoDetected && <span className={styles.autoTag}>다국어 자동 인식</span>}
                   {result?.provider && <span className={styles.providerTag}>{result.provider}</span>}
                 </span>
               </div>

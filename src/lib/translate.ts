@@ -1,4 +1,4 @@
-import { findSourceLanguage, findTargetLanguage } from "./languages";
+import { AUTO_LANG, findSourceLanguage, findTargetLanguage } from "./languages";
 
 async function translateWithDeepL(
   texts: string[],
@@ -6,7 +6,6 @@ async function translateWithDeepL(
   targetTranslateCode: string,
   apiKey: string
 ): Promise<string[]> {
-  const source = findSourceLanguage(sourceOcrCode);
   const target = findTargetLanguage(targetTranslateCode);
   const endpoint = apiKey.endsWith(":fx")
     ? "https://api-free.deepl.com/v2/translate"
@@ -14,7 +13,13 @@ async function translateWithDeepL(
 
   const params = new URLSearchParams();
   for (const t of texts) params.append("text", t);
-  params.append("source_lang", source.translateCode.toUpperCase());
+  // Omitting source_lang lets DeepL auto-detect it per text, which is what
+  // a mixed-language page needs — a single fixed source would mistranslate
+  // whichever lines aren't actually in that language.
+  if (sourceOcrCode !== AUTO_LANG) {
+    const source = findSourceLanguage(sourceOcrCode);
+    params.append("source_lang", source.translateCode.toUpperCase());
+  }
   params.append("target_lang", target.deeplCode);
 
   const res = await fetch(endpoint, {
@@ -53,6 +58,19 @@ async function translateOneWithMyMemory(
     responseData: { translatedText: string };
     responseStatus: number | string;
   };
+
+  // MyMemory reports errors inside a 200 OK by stuffing the message into
+  // responseStatus (as "403", "429", etc.) — including when "autodetect"
+  // resolves to the same language as the target. It puts that same message
+  // in responseData.translatedText too, so an unchecked responseStatus lets
+  // an error string like "PLEASE SELECT TWO DISTINCT LANGUAGES" get used as
+  // if it were the real translation. A line already in the target language
+  // needs no translation anyway, so falling back to the original text is
+  // the right behavior for every error case here, not just this one.
+  if (Number(data.responseStatus) !== 200) {
+    return text;
+  }
+
   return data.responseData?.translatedText ?? text;
 }
 
@@ -61,7 +79,10 @@ async function translateWithMyMemory(
   sourceOcrCode: string,
   targetTranslateCode: string
 ): Promise<string[]> {
-  const source = findSourceLanguage(sourceOcrCode);
+  // MyMemory accepts "autodetect" as the source half of langpair, resolving
+  // it per request — exactly what a mixed-language page needs since each
+  // line can come back with a different detected source.
+  const sourceTranslateCode = sourceOcrCode === AUTO_LANG ? "autodetect" : findSourceLanguage(sourceOcrCode).translateCode;
   const results: string[] = [];
   // MyMemory has no batch endpoint and a modest free rate limit, so lines
   // are translated a few at a time rather than all in parallel.
@@ -69,7 +90,7 @@ async function translateWithMyMemory(
   for (let i = 0; i < texts.length; i += CONCURRENCY) {
     const chunk = texts.slice(i, i + CONCURRENCY);
     const translated = await Promise.all(
-      chunk.map((t) => translateOneWithMyMemory(t, source.translateCode, targetTranslateCode))
+      chunk.map((t) => translateOneWithMyMemory(t, sourceTranslateCode, targetTranslateCode))
     );
     results.push(...translated);
   }
@@ -87,9 +108,9 @@ export async function translateBatch(
   targetTranslateCode: string
 ): Promise<TranslateResult> {
   const deeplKey = process.env.DEEPL_API_KEY;
-  const source = findSourceLanguage(sourceOcrCode);
+  const deeplUsable = sourceOcrCode === AUTO_LANG || findSourceLanguage(sourceOcrCode).deeplSupported;
 
-  if (deeplKey && source.deeplSupported) {
+  if (deeplKey && deeplUsable) {
     const translations = await translateWithDeepL(texts, sourceOcrCode, targetTranslateCode, deeplKey);
     return { translations, provider: "deepl" };
   }
